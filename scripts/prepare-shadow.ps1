@@ -211,7 +211,9 @@ function Set-ModEnabledLine {
 }
 
 Set-ModEnabledLine -Lines $modsLines -ModName "FoundationBridge" -Enabled (-not $DisableBridge)
-Set-ModEnabledLine -Lines $modsLines -ModName "FoundationDumper" -Enabled ([bool]$EnableDumper)
+if ($EnableDumper -or (Test-Path (Join-Path $ModsSourceDir "FoundationDumper"))) {
+    Set-ModEnabledLine -Lines $modsLines -ModName "FoundationDumper" -Enabled ([bool]$EnableDumper)
+}
 Set-Content -Path $modsTxtPath -Value ($modsLines -join "`r`n") -Encoding UTF8
 
 Write-Host "Shadow runtime ready:"

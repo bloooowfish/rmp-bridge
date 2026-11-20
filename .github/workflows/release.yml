@@ -1,0 +1,62 @@
+name: Release (Windows x64)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-x64:
+    name: Build & Package Runtime
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage runtime bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $PWD 'stage'
+          $dist = Join-Path $PWD 'dist'
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
+          New-Item -ItemType Directory -Force -Path $stage, $dist | Out-Null
+
+          $bridgeDst = Join-Path $stage 'mods\FoundationBridge'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $bridgeDst) | Out-Null
+          Copy-Item -Path 'mods\FoundationBridge' -Destination $bridgeDst -Recurse -Force
+
+          $scriptsDst = Join-Path $stage 'scripts'
+          New-Item -ItemType Directory -Force -Path $scriptsDst | Out-Null
+          Copy-Item -Path 'scripts\prepare-shadow.ps1' -Destination (Join-Path $scriptsDst 'prepare-shadow.ps1') -Force
+
+          Copy-Item -Path 'LICENSE' -Destination (Join-Path $stage 'LICENSE') -Force
+          Copy-Item -Path 'README.md' -Destination (Join-Path $stage 'README.md') -Force
+
+          $zipPath = Join-Path $dist 'rmp-bridge-windows.zip'
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal -Force
+
+          $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path (Join-Path $dist 'SHA256SUMS.txt') -Value "$hash  rmp-bridge-windows.zip" -Encoding UTF8
+          Write-Host "Packaged $zipPath (sha256: $hash)"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmp-bridge-windows
+          path: dist/
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/rmp-bridge-windows.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
